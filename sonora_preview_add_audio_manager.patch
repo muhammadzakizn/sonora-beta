@@ -1,0 +1,307 @@
+From 7517cf96fdc0929d991c735f37d5e47a83e670b4 Mon Sep 17 00:00:00 2001
+From: Sonora Bot <sonora@example.com>
+Date: Fri, 14 Nov 2025 11:10:21 +0000
+Subject: [PATCH] feat: add AudioManager module + preview UI, service worker,
+ manifest
+
+---
+ icons/icon-192.png        |  0
+ index.html                | 57 ++++++++++++++++++++++++++
+ manifest.json             |  9 +++++
+ service-worker.js         | 18 +++++++++
+ src/audio/AudioManager.js | 84 +++++++++++++++++++++++++++++++++++++++
+ src/main.js               | 72 +++++++++++++++++++++++++++++++++
+ styles.css                |  1 +
+ 7 files changed, 241 insertions(+)
+ create mode 100644 icons/icon-192.png
+ create mode 100644 index.html
+ create mode 100644 manifest.json
+ create mode 100644 service-worker.js
+ create mode 100644 src/audio/AudioManager.js
+ create mode 100644 src/main.js
+ create mode 100644 styles.css
+
+diff --git a/icons/icon-192.png b/icons/icon-192.png
+new file mode 100644
+index 0000000..e69de29
+diff --git a/index.html b/index.html
+new file mode 100644
+index 0000000..f76356d
+--- /dev/null
++++ b/index.html
+@@ -0,0 +1,57 @@
++<!doctype html>
++<html lang="id">
++<head>
++  <meta charset="utf-8" />
++  <meta name="viewport" content="width=device-width,initial-scale=1" />
++  <title>SONORA Preview</title>
++  <link rel="manifest" href="/manifest.json" />
++  <style>
++    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:24px;background:#0b0b0f;color:#eaeaea}
++    .card{background:#111214;padding:16px;border-radius:12px;max-width:720px;margin:0 auto;box-shadow:0 6px 18px rgba(0,0,0,.5)}
++    h1{margin-top:0;font-size:20px}
++    .controls{display:flex;gap:12px;align-items:center}
++    .slider{flex:1}
++    label{font-size:13px;color:#cfcfcf}
++    button{background:#1f7a8c;border:none;padding:8px 12px;border-radius:8px;color:white;cursor:pointer}
++    .muted{opacity:.6}
++    footer{font-size:12px;color:#9a9a9a;margin-top:12px}
++  </style>
++</head>
++<body>
++  <div class="card">
++    <h1>SONORA — Preview Cleaner AudioManager</h1>
++    <p class="muted">Demo: menggunakan oscillator untuk testing langsung tanpa file audio. Cocok untuk uji integrasi WebView.</p>
++    <div>
++      <div style="margin-bottom:8px">
++        <button id="startBtn">Start Audio</button>
++        <button id="stopBtn" disabled>Stop All</button>
++      </div>
++
++      <div style="margin-top:12px">
++        <label>Rain (simulated) volume: <span id="valRain">0.5</span></label>
++        <div class="controls">
++          <input id="sliderRain" type="range" min="0" max="1" step="0.01" value="0.5" class="slider">
++        </div>
++      </div>
++
++      <div style="margin-top:12px">
++        <label>Waves (simulated) volume: <span id="valWave">0.3</span></label>
++        <div class="controls">
++          <input id="sliderWave" type="range" min="0" max="1" step="0.01" value="0.3" class="slider">
++        </div>
++      </div>
++
++      <div style="margin-top:12px">
++        <label>Panning X (both sources): <span id="valPan">0</span></label>
++        <div class="controls">
++          <input id="sliderPan" type="range" min="-1" max="1" step="0.01" value="0" class="slider">
++        </div>
++      </div>
++
++      <footer>Tip: klik "Start Audio" dulu (kebijakan autoplay di mobile). Untuk integrasi asli, ganti oscillator dengan buffer audio yang di-load via AudioManager.</footer>
++    </div>
++  </div>
++
++  <script type="module" src="/src/main.js"></script>
++</body>
++</html>
+diff --git a/manifest.json b/manifest.json
+new file mode 100644
+index 0000000..4c53905
+--- /dev/null
++++ b/manifest.json
+@@ -0,0 +1,9 @@
++{
++  "name": "SONORA Preview",
++  "short_name": "SONORA",
++  "start_url": "/",
++  "display": "standalone",
++  "background_color": "#000000",
++  "theme_color": "#1a1a1a",
++  "icons": []
++}
+\ No newline at end of file
+diff --git a/service-worker.js b/service-worker.js
+new file mode 100644
+index 0000000..d0c18c6
+--- /dev/null
++++ b/service-worker.js
+@@ -0,0 +1,18 @@
++const CACHE = 'sonora-preview-v1';
++const ASSETS = ['/', '/index.html', '/src/main.js', '/src/audio/AudioManager.js', '/styles.css'];
++
++self.addEventListener('install', (e) => {
++  e.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
++  self.skipWaiting();
++});
++
++self.addEventListener('fetch', (e) => {
++  const url = new URL(e.request.url);
++  if (url.origin === location.origin) {
++    e.respondWith(caches.match(e.request).then(resp => resp || fetch(e.request).then(r => {
++      const copy = r.clone();
++      caches.open(CACHE).then(c => c.put(e.request, copy));
++      return r;
++    })).catch(()=>caches.match('/index.html')));
++  }
++});
+diff --git a/src/audio/AudioManager.js b/src/audio/AudioManager.js
+new file mode 100644
+index 0000000..b9a12b2
+--- /dev/null
++++ b/src/audio/AudioManager.js
+@@ -0,0 +1,84 @@
++export default class AudioManager {
++  constructor() {
++    this.ctx = null;
++    this.masterGain = null;
++    this.sources = new Map();
++    this.initialized = false;
++  }
++
++  async init() {
++    if (this.initialized) return;
++    const AudioContext = window.AudioContext || window.webkitAudioContext;
++    this.ctx = new AudioContext();
++    this.masterGain = this.ctx.createGain();
++    this.masterGain.gain.value = 1;
++    this.masterGain.connect(this.ctx.destination);
++    this.initialized = true;
++
++    if (this.ctx.state === 'suspended') {
++      const resume = () => {
++        if (this.ctx.state === 'suspended') this.ctx.resume();
++        window.removeEventListener('pointerdown', resume);
++      };
++      window.addEventListener('pointerdown', resume);
++    }
++  }
++
++  async addOscillatorSource(key, opts = {}) {
++    await this.init();
++    if (this.sources.has(key)) this.removeSource(key);
++    const osc = this.ctx.createOscillator();
++    osc.type = opts.type || 'sine';
++    osc.frequency.value = opts.frequency || 220;
++
++    const gainNode = this.ctx.createGain();
++    gainNode.gain.value = opts.volume ?? 0.5;
++
++    const panner = this.ctx.createPanner();
++    panner.panningModel = 'HRTF';
++    panner.distanceModel = 'linear';
++    panner.setPosition(opts.x ?? 0, opts.y ?? 0, opts.z ?? -1);
++
++    osc.connect(gainNode);
++    gainNode.connect(panner);
++    panner.connect(this.masterGain);
++
++    osc.start();
++
++    this.sources.set(key, {oscillator: osc, gainNode, panner});
++  }
++
++  setVolume(key, value) {
++    const s = this.sources.get(key);
++    if (!s) return;
++    s.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
++    s.gainNode.gain.linearRampToValueAtTime(value, this.ctx.currentTime + 0.05);
++  }
++
++  setPosition(key, x,y,z) {
++    const s = this.sources.get(key);
++    if (!s) return;
++    s.panner.setPosition(x, y, z);
++  }
++
++  removeSource(key) {
++    const s = this.sources.get(key);
++    if (!s) return;
++    try { if (s.oscillator) s.oscillator.stop(0); if (s.bufferSource) s.bufferSource.stop(0); } catch(_) {}
++    try { if (s.oscillator) s.oscillator.disconnect(); } catch(_) {}
++    try { if (s.bufferSource) s.bufferSource.disconnect(); } catch(_) {}
++    try { s.gainNode.disconnect(); s.panner.disconnect(); } catch(_) {}
++    this.sources.delete(key);
++  }
++
++  stopAll() {
++    for (const key of Array.from(this.sources.keys())) this.removeSource(key);
++  }
++
++  destroy() {
++    this.stopAll();
++    try { this.masterGain.disconnect(); } catch(_) {}
++    if (this.ctx) { try { this.ctx.close(); } catch(_) {} this.ctx = null; }
++    this.initialized = false;
++  }
++}
+diff --git a/src/main.js b/src/main.js
+new file mode 100644
+index 0000000..4a7ba2b
+--- /dev/null
++++ b/src/main.js
+@@ -0,0 +1,72 @@
++import AudioManager from './audio/AudioManager.js';
++
++const audioManager = new AudioManager();
++
++const startBtn = document.getElementById('startBtn');
++const stopBtn = document.getElementById('stopBtn');
++const sliderRain = document.getElementById('sliderRain');
++const sliderWave = document.getElementById('sliderWave');
++const sliderPan = document.getElementById('sliderPan');
++const valRain = document.getElementById('valRain');
++const valWave = document.getElementById('valWave');
++const valPan = document.getElementById('valPan');
++
++let running = false;
++
++startBtn.addEventListener('click', async () => {
++  try {
++    await audioManager.init();
++    await audioManager.addOscillatorSource('rain', { type: 'triangle', frequency: 120, volume: Number(sliderRain.value) });
++    await audioManager.addOscillatorSource('waves', { type: 'sine', frequency: 80, volume: Number(sliderWave.value) });
++    running = true;
++    startBtn.disabled = true;
++    stopBtn.disabled = false;
++  } catch (e) {
++    console.error('Failed to start audio', e);
++    alert('Gagal memulai audio: ' + e.message);
++  }
++});
++
++stopBtn.addEventListener('click', () => {
++  audioManager.stopAll();
++  running = false;
++  startBtn.disabled = false;
++  stopBtn.disabled = true;
++});
++
++function debounce(fn, wait=60){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), wait); }; }
++
++sliderRain.addEventListener('input', (e)=>{
++  const v = Number(e.target.value);
++  valRain.textContent = v.toFixed(2);
++  if (running) debounce(()=>audioManager.setVolume('rain', v))();
++});
++sliderWave.addEventListener('input', (e)=>{
++  const v = Number(e.target.value);
++  valWave.textContent = v.toFixed(2);
++  if (running) debounce(()=>audioManager.setVolume('waves', v))();
++});
++sliderPan.addEventListener('input', (e)=>{
++  const v = Number(e.target.value);
++  valPan.textContent = v;
++  if (running) {
++    const x = v;
++    audioManager.setPosition('rain', x,0,-1);
++    audioManager.setPosition('waves', -x,0,-1);
++  }
++});
++
++document.addEventListener('visibilitychange', () => {
++  if (!audioManager.initialized) return;
++  if (document.visibilityState === 'hidden') {
++    try { audioManager.masterGain.gain.linearRampToValueAtTime(0.0, audioManager.ctx.currentTime + 0.3); } catch(_) {}
++  } else {
++    try { audioManager.masterGain.gain.linearRampToValueAtTime(1.0, audioManager.ctx.currentTime + 0.2); } catch(_) {}
++  }
++});
++
++if ('serviceWorker' in navigator) {
++  navigator.serviceWorker.register('/service-worker.js').catch(e => console.warn('SW reg failed', e));
++}
++
++window._sonora = { audioManager };
+diff --git a/styles.css b/styles.css
+new file mode 100644
+index 0000000..1d26340
+--- /dev/null
++++ b/styles.css
+@@ -0,0 +1 @@
++/* empty: styles are inline in index.html for preview */
+-- 
+2.39.2
+
