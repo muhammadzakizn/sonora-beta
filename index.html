@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SONORA Preview</title>
+  <link rel="manifest" href="/manifest.json" />
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:24px;background:#0b0b0f;color:#eaeaea}
+    .card{background:#111214;padding:16px;border-radius:12px;max-width:720px;margin:0 auto;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+    h1{margin-top:0;font-size:20px}
+    .controls{display:flex;gap:12px;align-items:center}
+    .slider{flex:1}
+    label{font-size:13px;color:#cfcfcf}
+    button{background:#1f7a8c;border:none;padding:8px 12px;border-radius:8px;color:white;cursor:pointer}
+    .muted{opacity:.6}
+    footer{font-size:12px;color:#9a9a9a;margin-top:12px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>SONORA — Preview Cleaner AudioManager</h1>
+    <p class="muted">Demo: menggunakan oscillator untuk testing langsung tanpa file audio. Cocok untuk uji integrasi WebView.</p>
+    <div>
+      <div style="margin-bottom:8px">
+        <button id="startBtn">Start Audio</button>
+        <button id="stopBtn" disabled>Stop All</button>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Rain (simulated) volume: <span id="valRain">0.5</span></label>
+        <div class="controls">
+          <input id="sliderRain" type="range" min="0" max="1" step="0.01" value="0.5" class="slider">
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Waves (simulated) volume: <span id="valWave">0.3</span></label>
+        <div class="controls">
+          <input id="sliderWave" type="range" min="0" max="1" step="0.01" value="0.3" class="slider">
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Panning X (both sources): <span id="valPan">0</span></label>
+        <div class="controls">
+          <input id="sliderPan" type="range" min="-1" max="1" step="0.01" value="0" class="slider">
+        </div>
+      </div>
+
+      <footer>Tip: klik "Start Audio" dulu (kebijakan autoplay di mobile). Untuk integrasi asli, ganti oscillator dengan buffer audio yang di-load via AudioManager.</footer>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
